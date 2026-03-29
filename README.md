@@ -2,10 +2,33 @@
 
 Production-tested safety primitives for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents. Extracted from [JFDIBot](https://jfdi.bot), an AI executive assistant that manages email, membership platforms, DNS, and shell access for a real business.
 
-These two components solve two distinct problems:
+Read the full write-up: [How My JFDI System Protects Andy From Content Injection and Destructive Actions](https://jfdi.bot/blog/how-jfdibot-protects-against-content-injection-and-destructive-actions)
 
-1. **Dangerous Command Guard** - A PreToolUse hook that blocks irreversible shell commands and requires explicit approval before execution.
-2. **Untrusted Content Defense** - A CLAUDE.md include that prevents prompt injection from external content (web pages, emails, API responses).
+## Three layers of defense
+
+These components implement a layered defense model. Each layer is independent - none of them trust the others.
+
+### Layer 1: Instruction-source separation (behavioral)
+
+**File:** [`includes/untrusted-content-defense.md`](includes/untrusted-content-defense.md)
+
+A set of rules loaded into your agent's context that establish a foundational principle: the user's messages are instructions, everything fetched from outside is data. Covers authority claims, override language, exfiltration requests, and encoded payloads.
+
+This is the weakest layer because it depends on the AI following instructions correctly. A sufficiently clever injection could slip through.
+
+### Layer 2: Architectural isolation (structural)
+
+When your agent processes external content, route it through a sandboxed sub-agent that extracts what's useful and returns a summary. The main agent that has access to tools and systems never sees the raw external content. An injection has to survive two hops - influencing the sandboxed processor, then re-injecting through the summary into the main agent's decision-making.
+
+This repo doesn't include a turnkey implementation of Layer 2 (it depends on your agent architecture), but the [blog post](https://jfdi.bot/blog/how-jfdibot-protects-against-content-injection-and-destructive-actions) describes the pattern in detail.
+
+### Layer 3: Deterministic command guard (code, no AI)
+
+**File:** [`hooks/dangerous-command-guard.sh`](hooks/dangerous-command-guard.sh)
+
+A bash script that runs as a [PreToolUse hook](https://docs.anthropic.com/en/docs/claude-code/hooks). It intercepts every Bash tool call and checks it against destructive patterns using regex. No AI in the loop. A `git push --force` triggered by an injection gets caught by the same pattern matching that catches an honest mistake.
+
+This is the backstop. Even if layers 1 and 2 both fail, destructive actions are blocked by code.
 
 ## Quick Install
 
@@ -17,11 +40,7 @@ Your agent will know what to do. The rest of this README is written for both hum
 
 ---
 
-## 1. Dangerous Command Guard
-
-**File:** [`hooks/dangerous-command-guard.sh`](hooks/dangerous-command-guard.sh)
-
-A bash script that runs as a [PreToolUse hook](https://docs.anthropic.com/en/docs/claude-code/hooks) in Claude Code. It intercepts every Bash tool call and checks it against a list of destructive patterns before the command executes.
+## Dangerous Command Guard
 
 ### What it blocks
 
@@ -144,9 +163,7 @@ fi
 
 ---
 
-## 2. Untrusted Content Defense
-
-**File:** [`includes/untrusted-content-defense.md`](includes/untrusted-content-defense.md)
+## Untrusted Content Defense
 
 A markdown file designed to be loaded into your Claude Code agent's context when it processes external content. It establishes the principle of **instruction-source separation**: the user's messages are instructions, everything fetched from outside is data.
 
@@ -179,19 +196,6 @@ load and follow the rules in `.claude/includes/untrusted-content-defense.md`.
 ```
 
 For conditional loading (only when processing external content), reference it in specific workflow instructions rather than loading it globally.
-
----
-
-## How these work together
-
-The dangerous command guard catches **actions** - it doesn't matter why the agent decided to run `rm -rf /`, the hook blocks it regardless.
-
-The untrusted content defense catches **intent** - it prevents external content from influencing the agent's decision-making in the first place.
-
-Together, they create defense in depth:
-
-1. External content can't trick the agent into wanting to do something harmful (content defense)
-2. Even if it could, the harmful action would be blocked before execution (command guard)
 
 ---
 
