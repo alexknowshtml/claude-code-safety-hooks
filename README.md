@@ -2,7 +2,7 @@
 
 Production-tested safety primitives for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents. Extracted from [JFDIBot](https://jfdi.bot), an AI executive assistant that manages email, membership platforms, DNS, and shell access for a real business.
 
-Read the full write-up: [How My JFDI System Protects Andy From Content Injection and Destructive Actions](https://jfdi.bot/blog/how-jfdibot-protects-against-content-injection-and-destructive-actions)
+Read the full write-up: [Three Layers Between My AI and My Data](https://jfdi.bot/blog/three-layer-ai-defense)
 
 ## Three layers of defense
 
